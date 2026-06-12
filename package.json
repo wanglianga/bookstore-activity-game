@@ -1,0 +1,17 @@
+{
+  "name": "bookstore-activity-game",
+  "version": "1.0.0",
+  "description": "书店活动经营游戏 - PixiJS",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "pixi.js": "^7.4.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}
