@@ -1,7 +1,7 @@
 import { getGameState } from './state.js';
 import { generateRandomCustomer, calculateDailyCustomerCount } from './customer.js';
 import { getActivityManager } from './activity.js';
-import { GAME_CONFIG } from './config.js';
+import { GAME_CONFIG, BOOK_CATEGORIES } from './config.js';
 
 export class GameEngine {
   constructor() {
@@ -232,16 +232,13 @@ export class GameEngine {
 
   buyBooks(category, quantity) {
     const state = this.state;
-    const catConfig = {
-      literature: 45,
-      science: 55,
-      history: 50,
-      children: 35,
-      business: 50,
-      art: 65,
-    };
+    const catConfig = BOOK_CATEGORIES[category];
     
-    const cost = catConfig[category] * quantity * GAME_CONFIG.BOOK_COST_RATIO;
+    if (!catConfig) {
+      return { success: false, reason: '图书分类不存在' };
+    }
+    
+    const cost = catConfig.basePrice * quantity * GAME_CONFIG.BOOK_COST_RATIO;
     
     if (!state.canAfford(cost)) {
       return { success: false, reason: '资金不足' };
