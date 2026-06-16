@@ -1,4 +1,4 @@
-import { GAME_CONFIG, BOOK_CATEGORIES } from './config.js';
+import { GAME_CONFIG, BOOK_CATEGORIES, STAFF_ROLES } from './config.js';
 
 export class GameState {
   constructor() {
@@ -25,6 +25,21 @@ export class GameState {
     this.maxSpace = 100;
     this.usedSpace = 0;
 
+    this.staffAssignments = {};
+    Object.keys(STAFF_ROLES).forEach(key => {
+      this.staffAssignments[key] = 0;
+    });
+    this.staffAssignments.CASHIER = 1;
+    this.staffAssignments.GUIDE = 1;
+
+    this.displayConfig = {};
+    Object.keys(BOOK_CATEGORIES).forEach(key => {
+      this.displayConfig[key] = {
+        prominent: false,
+        stock: 30,
+      };
+    });
+
     this.inventory = {};
     Object.keys(BOOK_CATEGORIES).forEach(key => {
       this.inventory[key] = 30;
@@ -32,6 +47,14 @@ export class GameState {
 
     this.currentActivity = null;
     this.activityEndTime = 0;
+
+    this.crisisActive = false;
+    this.currentCrisis = null;
+    this.crisisResolved = false;
+
+    this.spaceCompression = 0;
+    this.blockedShelves = 0;
+    this.coffeeQueueLength = 0;
 
     this.customers = [];
     this.members = [];
@@ -53,6 +76,69 @@ export class GameState {
 
   get availableSpace() {
     return this.maxSpace - this.usedSpace;
+  }
+
+  getSalesMultiplier() {
+    if (this.spaceCompression <= GAME_CONFIG.SPACE_COMPRESSION_THRESHOLD) return 1;
+    const excess = this.spaceCompression - GAME_CONFIG.SPACE_COMPRESSION_THRESHOLD;
+    return Math.max(0.3, 1 - excess * GAME_CONFIG.SPACE_SALES_PENALTY_PER_POINT);
+  }
+
+  getBrowseMultiplier() {
+    if (this.spaceCompression <= GAME_CONFIG.SPACE_COMPRESSION_THRESHOLD) return 1;
+    const excess = this.spaceCompression - GAME_CONFIG.SPACE_COMPRESSION_THRESHOLD;
+    return Math.max(0.4, 1 - excess * GAME_CONFIG.SPACE_BROWSE_PENALTY_PER_POINT);
+  }
+
+  getStaffBonus(role) {
+    const count = this.staffAssignments[role] || 0;
+    const roleConfig = STAFF_ROLES[role];
+    if (!roleConfig) return 0;
+    if (role === 'CASHIER') return count * roleConfig.salesBonus;
+    if (role === 'GUIDE') return count * roleConfig.buyBonus;
+    if (role === 'BARISTA') return count * roleConfig.coffeeSpeedBonus;
+    if (role === 'EVENT_STAFF') return count * roleConfig.crisisBonus;
+    return 0;
+  }
+
+  getAssignedStaffCount() {
+    return Object.values(this.staffAssignments).reduce((sum, count) => sum + count, 0);
+  }
+
+  getUnassignedStaffCount() {
+    return this.staffCount - this.getAssignedStaffCount();
+  }
+
+  assignStaff(role, count) {
+    const current = this.staffAssignments[role] || 0;
+    const unassigned = this.getUnassignedStaffCount();
+    
+    if (count > 0 && unassigned < count) return false;
+    if (count < 0 && current < Math.abs(count)) return false;
+    
+    this.staffAssignments[role] = current + count;
+    return true;
+  }
+
+  setDisplayProminent(category, prominent) {
+    if (!this.displayConfig[category]) return false;
+    const currentProminent = Object.keys(this.displayConfig).filter(k => this.displayConfig[k].prominent).length;
+    if (prominent && currentProminent >= 2 && !this.displayConfig[category].prominent) return false;
+    this.displayConfig[category].prominent = prominent;
+    return true;
+  }
+
+  updateSpaceCompression() {
+    let compression = 0;
+    
+    compression += this.usedSpace * 0.5;
+    
+    if (this.seatCount > 20) {
+      compression += (this.seatCount - 20) * 1.5;
+    }
+    
+    this.blockedShelves = Math.floor(compression / 25);
+    this.spaceCompression = Math.min(100, compression);
   }
 
   addMoney(amount) {
@@ -123,6 +209,12 @@ export class GameState {
     this.dailyNewMembers = 0;
     this.currentActivity = null;
     this.usedSpace = 0;
+    this.spaceCompression = 0;
+    this.blockedShelves = 0;
+    this.coffeeQueueLength = 0;
+    this.crisisActive = false;
+    this.currentCrisis = null;
+    this.crisisResolved = false;
 
     const expenses = this.dailyRent + (this.staffCount * GAME_CONFIG.STAFF_SALARY);
     this.subtractMoney(expenses);

@@ -46,9 +46,19 @@ export class Customer {
   }
 
   generatePreferences() {
+    const state = getGameState();
     const prefs = {};
     const totalWeight = PREFERENCES.reduce((sum, cat) => {
-      const weight = BOOK_CATEGORIES[cat].popularity * (0.5 + Math.random());
+      let weight = BOOK_CATEGORIES[cat].popularity * (0.5 + Math.random());
+      
+      if (state.currentActivity && state.currentActivity.boostedCategory === cat) {
+        weight *= 2.0;
+      }
+      
+      if (state.displayConfig[cat] && state.displayConfig[cat].prominent) {
+        weight *= 1.5;
+      }
+      
       prefs[cat] = weight;
       return sum + weight;
     }, 0);
@@ -61,13 +71,25 @@ export class Customer {
   }
 
   getPreferredCategory() {
+    const state = getGameState();
     const rand = Math.random();
     let cumulative = 0;
-    for (const cat of PREFERENCES) {
+    
+    const availableCats = PREFERENCES.filter(cat => {
+      if (state.blockedShelves > 0) {
+        const catIndex = PREFERENCES.indexOf(cat);
+        if (catIndex < state.blockedShelves) return Math.random() > 0.5;
+      }
+      return true;
+    });
+    
+    if (availableCats.length === 0) return PREFERENCES[0];
+    
+    for (const cat of availableCats) {
       cumulative += this.preferences[cat];
       if (rand <= cumulative) return cat;
     }
-    return PREFERENCES[0];
+    return availableCats[0];
   }
 
   getMemberDiscount() {
@@ -83,7 +105,17 @@ export class Customer {
   }
 
   update(deltaMinutes) {
+    const state = getGameState();
+    
     this.remainingTime -= deltaMinutes;
+    
+    if (state.spaceCompression > GAME_CONFIG.SPACE_COMPRESSION_THRESHOLD) {
+      const browseMult = state.getBrowseMultiplier();
+      if (this.state === 'browsing' && Math.random() < (1 - browseMult) * 0.02) {
+        this.patience -= 5;
+        this.mood = Math.max(0, this.mood - 0.02);
+      }
+    }
     
     if (this.remainingTime <= 0 && this.state !== 'leaving') {
       this.state = 'leaving';
@@ -110,7 +142,16 @@ export class Customer {
     const quantity = Math.ceil(Math.random() * 2);
     const discount = this.getMemberDiscount();
     
-    const totalPrice = basePrice * quantity * discount;
+    let totalPrice = basePrice * quantity * discount;
+    
+    const guideBonus = state.getStaffBonus('GUIDE');
+    if (guideBonus > 0 && Math.random() < guideBonus) {
+      quantity += 1;
+    }
+    
+    const salesMult = state.getSalesMultiplier();
+    totalPrice *= salesMult;
+    
     const cost = basePrice * quantity * GAME_CONFIG.BOOK_COST_RATIO;
     
     this.hasBought = true;
@@ -146,13 +187,17 @@ export function generateRandomCustomer() {
   const state = getGameState();
   const types = Object.keys(CUSTOMER_TYPES);
   
-  const weights = {
+  let weights = {
     CASUAL: 0.35,
     READER: 0.2,
     STUDENT: 0.2,
     PROFESSIONAL: 0.15,
     FAMILY: 0.1,
   };
+  
+  if (state.currentActivity && state.currentActivity.customerTypeWeights) {
+    weights = { ...state.currentActivity.customerTypeWeights };
+  }
   
   const rand = Math.random();
   let cumulative = 0;
@@ -195,6 +240,11 @@ export function calculateDailyCustomerCount() {
   
   baseCount *= (0.8 + state.seatCount / 20 * 0.4);
   baseCount *= (0.9 + state.staffCount / 5 * 0.3);
+  
+  if (state.spaceCompression > GAME_CONFIG.SPACE_COMPRESSION_THRESHOLD) {
+    const browseMult = state.getBrowseMultiplier();
+    baseCount *= browseMult;
+  }
   
   return Math.floor(baseCount * (0.8 + Math.random() * 0.4));
 }

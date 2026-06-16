@@ -54,7 +54,7 @@ html, body {
 
 .top-bar .stats {
   display: flex;
-  gap: 30px;
+  gap: 20px;
 }
 
 .stat-item {
@@ -64,13 +64,13 @@ html, body {
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #c4a574;
   margin-bottom: 2px;
 }
 
 .stat-value {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: bold;
   color: #f5e6d3;
 }
@@ -81,6 +81,10 @@ html, body {
 
 .stat-value.danger {
   color: #ff6b6b;
+}
+
+.stat-value.warning-space {
+  color: #ff9900;
 }
 
 .day-control {
@@ -237,13 +241,16 @@ html, body {
 }
 
 .manage-btn {
-  width: 28px;
+  width: auto;
+  min-width: 28px;
   height: 24px;
   border: none;
   border-radius: 3px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: bold;
+  padding: 0 6px;
+  transition: all 0.2s;
 }
 
 .manage-btn.add {
@@ -262,6 +269,85 @@ html, body {
 
 .manage-btn.remove:hover {
   background: #ab4a4a;
+}
+
+.staff-role-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: rgba(76, 53, 38, 0.4);
+  border: 1px solid #6b4423;
+  border-radius: 4px;
+}
+
+.staff-role-info {
+  flex: 1;
+}
+
+.staff-role-name {
+  font-size: 13px;
+  font-weight: bold;
+  color: #f5e6d3;
+}
+
+.staff-role-desc {
+  font-size: 10px;
+  color: #a0896c;
+  margin-top: 2px;
+}
+
+.staff-role-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.staff-role-count {
+  font-size: 14px;
+  font-weight: bold;
+  color: #ffd700;
+  min-width: 20px;
+  text-align: center;
+}
+
+.display-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  background: rgba(76, 53, 38, 0.4);
+  border: 1px solid #6b4423;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.display-card.prominent {
+  border-color: #ffd700;
+  background: rgba(139, 105, 20, 0.3);
+}
+
+.display-info {
+  flex: 1;
+}
+
+.display-name {
+  font-size: 13px;
+  font-weight: bold;
+  color: #f5e6d3;
+}
+
+.display-stock {
+  font-size: 10px;
+  color: #a0896c;
+  margin-top: 2px;
+}
+
+.display-toggle-btn {
+  white-space: nowrap;
+  padding: 4px 10px !important;
 }
 
 .bottom-info {
@@ -332,6 +418,83 @@ html, body {
   gap: 15px;
 }
 
+.crisis-overlay {
+  z-index: 200;
+}
+
+.crisis-modal {
+  max-width: 550px;
+  border-color: #ff4444;
+  animation: crisisPulse 0.5s ease-out;
+}
+
+.crisis-title {
+  color: #ff4444 !important;
+  font-size: 22px;
+}
+
+.crisis-content {
+  margin-bottom: 15px;
+}
+
+.crisis-event-desc {
+  font-size: 14px;
+  color: #f5e6d3;
+  margin-bottom: 15px;
+  padding: 10px;
+  background: rgba(139, 30, 30, 0.2);
+  border-radius: 6px;
+  border-left: 3px solid #ff4444;
+  line-height: 1.6;
+}
+
+.crisis-options-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #c4a574;
+  margin-bottom: 10px;
+}
+
+.crisis-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.crisis-option {
+  background: rgba(76, 53, 38, 0.6);
+  border: 1px solid #6b4423;
+  border-radius: 6px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.crisis-option:hover {
+  background: rgba(102, 71, 51, 0.8);
+  border-color: #ffd700;
+  transform: translateX(4px);
+}
+
+.crisis-option-name {
+  font-size: 14px;
+  font-weight: bold;
+  color: #f5e6d3;
+  margin-bottom: 4px;
+}
+
+.crisis-option-desc {
+  font-size: 12px;
+  color: #a0896c;
+  margin-bottom: 6px;
+}
+
+.crisis-option-effects {
+  display: flex;
+  gap: 15px;
+  font-size: 11px;
+}
+
 .customer-tooltip {
   position: absolute;
   background: rgba(44, 24, 16, 0.95);
@@ -382,19 +545,19 @@ html, body {
 
 .tab-buttons {
   display: flex;
-  gap: 4px;
+  gap: 3px;
   margin-bottom: 15px;
 }
 
 .tab-btn {
   flex: 1;
-  padding: 8px;
+  padding: 6px 4px;
   border: none;
   border-radius: 4px;
   background: rgba(76, 53, 38, 0.6);
   color: #a0896c;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: bold;
 }
 
@@ -416,6 +579,7 @@ html, body {
   font-size: 14px;
   z-index: 80;
   animation: slideDown 0.3s ease-out;
+  white-space: nowrap;
 }
 
 .notification.success {
@@ -439,6 +603,12 @@ html, body {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+}
+
+@keyframes crisisPulse {
+  0% { transform: scale(0.9); opacity: 0; }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 ::-webkit-scrollbar {

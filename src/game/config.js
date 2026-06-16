@@ -10,6 +10,17 @@ export const GAME_CONFIG = {
   BASE_CUSTOMERS_PER_DAY: 20,
   BOOK_COST_RATIO: 0.6,
   MEMBER_DISCOUNT: 0.85,
+
+  SPACE_COMPRESSION_THRESHOLD: 50,
+  SPACE_COMPRESSION_SEVERE: 75,
+  SPACE_SALES_PENALTY_PER_POINT: 0.008,
+  SPACE_BROWSE_PENALTY_PER_POINT: 0.006,
+  COFFEE_QUEUE_IMPACT_THRESHOLD: 5,
+  COFFEE_QUEUE_SLOW_FACTOR: 0.15,
+
+  CRISIS_CHANCE: 0.2,
+  CRISIS_MIN_HOUR: 12,
+  CRISIS_MAX_HOUR: 18,
 };
 
 export const ACTIVITY_TYPES = {
@@ -25,6 +36,9 @@ export const ACTIVITY_TYPES = {
     customerBoost: 1.5,
     memberBoost: 1.2,
     color: 0x4a90d9,
+    customerTypeWeights: { CASUAL: 0.15, READER: 0.35, STUDENT: 0.2, PROFESSIONAL: 0.2, FAMILY: 0.1 },
+    boostedCategory: 'SCIENCE',
+    canCrisis: true,
   },
   AUTHOR_MEETING: {
     id: 'author_meeting',
@@ -39,6 +53,9 @@ export const ACTIVITY_TYPES = {
     memberBoost: 1.5,
     bookSalesBoost: 2.0,
     color: 0xd94a6b,
+    customerTypeWeights: { CASUAL: 0.1, READER: 0.45, STUDENT: 0.15, PROFESSIONAL: 0.2, FAMILY: 0.1 },
+    boostedCategory: 'LITERATURE',
+    canCrisis: true,
   },
   KIDS_EXPERIENCE: {
     id: 'kids_experience',
@@ -53,6 +70,9 @@ export const ACTIVITY_TYPES = {
     memberBoost: 1.3,
     kidsBookBoost: 3.0,
     color: 0x7cd94a,
+    customerTypeWeights: { CASUAL: 0.05, READER: 0.05, STUDENT: 0.15, PROFESSIONAL: 0.05, FAMILY: 0.7 },
+    boostedCategory: 'CHILDREN',
+    canCrisis: true,
   },
   NEW_BOOK_LAUNCH: {
     id: 'new_book_launch',
@@ -67,6 +87,9 @@ export const ACTIVITY_TYPES = {
     memberBoost: 1.8,
     newBookDiscount: 0.8,
     color: 0xd9a94a,
+    customerTypeWeights: { CASUAL: 0.15, READER: 0.4, STUDENT: 0.15, PROFESSIONAL: 0.2, FAMILY: 0.1 },
+    boostedCategory: 'BUSINESS',
+    canCrisis: true,
   },
 };
 
@@ -128,4 +151,56 @@ export const MEMBER_LEVELS = {
   SILVER: { id: 'silver', name: '银牌会员', discount: 0.9, pointsRate: 1.5, minSpend: 500 },
   GOLD: { id: 'gold', name: '金牌会员', discount: 0.85, pointsRate: 2, minSpend: 1000 },
   PLATINUM: { id: 'platinum', name: '钻石会员', discount: 0.8, pointsRate: 3, minSpend: 2000 },
+};
+
+export const CRISIS_TYPES = {
+  INSTRUCTOR_CANCEL: {
+    id: 'instructor_cancel',
+    name: '讲师临时取消',
+    desc: '活动讲师因故无法到场，需要紧急处理！',
+    icon: '⚠️',
+  },
+};
+
+export const CRISIS_OPTIONS = {
+  STAFF_SHARING: {
+    id: 'staff_sharing',
+    name: '店员代为分享',
+    desc: '让有经验的店员代替讲师进行分享',
+    trustChange: -5,
+    incomeRatio: 0.6,
+    reputationChange: -3,
+    popularityChange: -2,
+    costRefund: 0,
+    memberTrustMultiplier: 0.8,
+  },
+  POSTPONE: {
+    id: 'postpone',
+    name: '延期举办',
+    desc: '通知顾客活动延期，择日重新举办',
+    trustChange: -10,
+    incomeRatio: 0.1,
+    reputationChange: -8,
+    popularityChange: -5,
+    costRefund: 0.5,
+    memberTrustMultiplier: 0.6,
+  },
+  REFUND: {
+    id: 'refund',
+    name: '全额退款',
+    desc: '取消活动，为所有参与者全额退款',
+    trustChange: -3,
+    incomeRatio: 0,
+    reputationChange: -5,
+    popularityChange: -3,
+    costRefund: 1.0,
+    memberTrustMultiplier: 0.9,
+  },
+};
+
+export const STAFF_ROLES = {
+  CASHIER: { id: 'cashier', name: '收银员', desc: '提高结账效率，减少排队', salesBonus: 0.1 },
+  GUIDE: { id: 'guide', name: '导购员', desc: '引导顾客找到书籍，提升购买率', buyBonus: 0.15 },
+  BARISTA: { id: 'barista', name: '咖啡师', desc: '加快咖啡制作，减少排队影响', coffeeSpeedBonus: 0.3 },
+  EVENT_STAFF: { id: 'event_staff', name: '活动专员', desc: '活动时可替代讲师，减少危机损失', crisisBonus: 0.3 },
 };

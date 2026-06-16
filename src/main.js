@@ -71,6 +71,19 @@ class Game {
     
     this.engine.onMoneyChange = (money) => {
     };
+    
+    this.engine.onCrisisTrigger = (crisis) => {
+      this.ui.showCrisisModal(crisis);
+    };
+    
+    this.engine.onCrisisResolved = (option, trustChange) => {
+    };
+    
+    this.engine.onSpaceWarning = (level) => {
+      if (level === 'severe') {
+        this.ui.showNotification('空间严重拥挤！顾客浏览和购买受影响', 'error');
+      }
+    };
   }
 
   setupResize() {

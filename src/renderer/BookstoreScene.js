@@ -1,6 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { getGameState } from '../game/state.js';
-import { GAME_CONFIG } from '../game/config.js';
+import { GAME_CONFIG, BOOK_CATEGORIES } from '../game/config.js';
 
 export class BookstoreScene {
   constructor(app) {
@@ -13,6 +13,11 @@ export class BookstoreScene {
     this.zones = {};
     this.decorations = [];
     this.customerSprites = new Map();
+    this.blockedOverlays = [];
+    this.prominentIndicators = [];
+    this.crisisIndicator = null;
+    this.spaceWarningIndicator = null;
+    this.coffeeQueueIndicator = null;
     
     this.storeWidth = GAME_CONFIG.STORE_WIDTH;
     this.storeHeight = GAME_CONFIG.STORE_HEIGHT;
@@ -83,22 +88,22 @@ export class BookstoreScene {
   createBookshelves() {
     const shelfGroup = new PIXI.Container();
     
-    const shelfConfigs = [
-      { x: 60, y: 60, rows: 5, cols: 1, direction: 'horizontal' },
-      { x: 60, y: 200, rows: 5, cols: 1, direction: 'horizontal' },
-      { x: 60, y: 340, rows: 5, cols: 1, direction: 'horizontal' },
-      { x: 60, y: 480, rows: 4, cols: 1, direction: 'horizontal' },
+    this.shelfConfigs = [
+      { x: 60, y: 60, rows: 5, cols: 1, direction: 'horizontal', category: 'LITERATURE' },
+      { x: 60, y: 200, rows: 5, cols: 1, direction: 'horizontal', category: 'SCIENCE' },
+      { x: 60, y: 340, rows: 5, cols: 1, direction: 'horizontal', category: 'HISTORY' },
+      { x: 60, y: 480, rows: 4, cols: 1, direction: 'horizontal', category: 'CHILDREN' },
       
-      { x: 200, y: 60, rows: 3, cols: 4, direction: 'vertical' },
+      { x: 200, y: 60, rows: 3, cols: 4, direction: 'vertical', category: 'BUSINESS' },
       
-      { x: 400, y: 60, rows: 5, cols: 1, direction: 'horizontal' },
-      { x: 400, y: 200, rows: 5, cols: 1, direction: 'horizontal' },
-      { x: 400, y: 340, rows: 5, cols: 1, direction: 'horizontal' },
+      { x: 400, y: 60, rows: 5, cols: 1, direction: 'horizontal', category: 'ART' },
+      { x: 400, y: 200, rows: 5, cols: 1, direction: 'horizontal', category: 'LITERATURE' },
+      { x: 400, y: 340, rows: 5, cols: 1, direction: 'horizontal', category: 'BUSINESS' },
       
-      { x: 540, y: 60, rows: 3, cols: 4, direction: 'vertical' },
+      { x: 540, y: 60, rows: 3, cols: 4, direction: 'vertical', category: 'SCIENCE' },
     ];
     
-    shelfConfigs.forEach((config, index) => {
+    this.shelfConfigs.forEach((config) => {
       const shelf = this.createBookshelf(config);
       shelfGroup.addChild(shelf);
     });
@@ -563,6 +568,11 @@ export class BookstoreScene {
     }
     
     this.updateActivityVisual();
+    this.updateBlockedShelves();
+    this.updateProminentDisplays();
+    this.updateCrisisVisual();
+    this.updateSpaceWarningVisual();
+    this.updateCoffeeQueueVisual();
   }
 
   animateCustomer(customer, sprite, delta) {
@@ -610,6 +620,182 @@ export class BookstoreScene {
     };
   }
 
+  updateBlockedShelves() {
+    const state = this.state;
+    
+    for (const overlay of this.blockedOverlays) {
+      this.container.removeChild(overlay);
+    }
+    this.blockedOverlays = [];
+    
+    if (state.blockedShelves > 0 && this.shelfConfigs) {
+      for (let i = 0; i < Math.min(state.blockedShelves, this.shelfConfigs.length); i++) {
+        const config = this.shelfConfigs[i];
+        const overlay = new PIXI.Graphics();
+        overlay.beginFill(0xff0000, 0.25);
+        const w = config.direction === 'horizontal' ? 120 : 40;
+        const h = config.direction === 'horizontal' ? 40 : 120;
+        overlay.drawRect(config.x - 5, config.y - 5, w + 10, h + 10);
+        overlay.endFill();
+        this.container.addChild(overlay);
+        this.blockedOverlays.push(overlay);
+        
+        const blockText = new PIXI.Text('遮挡', {
+          fontFamily: 'Microsoft YaHei',
+          fontSize: 10,
+          fill: 0xff4444,
+          fontWeight: 'bold',
+        });
+        blockText.anchor.set(0.5);
+        blockText.x = config.x + w / 2;
+        blockText.y = config.y + h / 2;
+        this.container.addChild(blockText);
+        this.blockedOverlays.push(blockText);
+      }
+    }
+  }
+
+  updateProminentDisplays() {
+    const state = this.state;
+    
+    for (const indicator of this.prominentIndicators) {
+      this.container.removeChild(indicator);
+    }
+    this.prominentIndicators = [];
+    
+    if (!this.shelfConfigs) return;
+    
+    Object.keys(state.displayConfig).forEach(cat => {
+      if (state.displayConfig[cat].prominent) {
+        const catConfig = BOOK_CATEGORIES[cat];
+        if (!catConfig) return;
+        
+        const matchingShelf = this.shelfConfigs.find(s => s.category === cat);
+        if (matchingShelf) {
+          const glow = new PIXI.Graphics();
+          const w = matchingShelf.direction === 'horizontal' ? 130 : 50;
+          const h = matchingShelf.direction === 'horizontal' ? 50 : 130;
+          glow.lineStyle(3, 0xffd700, 0.8);
+          glow.drawRoundedRect(matchingShelf.x - 8, matchingShelf.y - 8, w, h, 5);
+          this.container.addChild(glow);
+          this.prominentIndicators.push(glow);
+          
+          const star = new PIXI.Text('★', {
+            fontFamily: 'Microsoft YaHei',
+            fontSize: 14,
+            fill: 0xffd700,
+            fontWeight: 'bold',
+          });
+          star.x = matchingShelf.x + w - 15;
+          star.y = matchingShelf.y - 15;
+          this.container.addChild(star);
+          this.prominentIndicators.push(star);
+        }
+      }
+    });
+  }
+
+  updateCrisisVisual() {
+    const state = this.state;
+    
+    if (state.crisisActive && !this.crisisIndicator) {
+      this.crisisIndicator = new PIXI.Container();
+      
+      const bg = new PIXI.Graphics();
+      bg.beginFill(0xff0000, 0.15);
+      bg.drawRect(0, 0, this.storeWidth, this.storeHeight);
+      bg.endFill();
+      this.crisisIndicator.addChild(bg);
+      
+      const banner = new PIXI.Graphics();
+      banner.beginFill(0x8b0000, 0.9);
+      banner.drawRect(this.storeWidth / 2 - 150, 30, 300, 40);
+      banner.endFill();
+      this.crisisIndicator.addChild(banner);
+      
+      const text = new PIXI.Text('⚠ 紧急事件：讲师临时取消！', {
+        fontFamily: 'Microsoft YaHei',
+        fontSize: 16,
+        fill: 0xffffff,
+        fontWeight: 'bold',
+      });
+      text.anchor.set(0.5);
+      text.x = this.storeWidth / 2;
+      text.y = 50;
+      this.crisisIndicator.addChild(text);
+      
+      this.container.addChild(this.crisisIndicator);
+    } else if (!state.crisisActive && this.crisisIndicator) {
+      this.container.removeChild(this.crisisIndicator);
+      this.crisisIndicator = null;
+    }
+  }
+
+  updateSpaceWarningVisual() {
+    const state = this.state;
+    
+    if (state.spaceCompression > GAME_CONFIG.SPACE_COMPRESSION_SEVERE && !this.spaceWarningIndicator) {
+      this.spaceWarningIndicator = new PIXI.Container();
+      
+      const warningBg = new PIXI.Graphics();
+      warningBg.beginFill(0xff6600, 0.1);
+      warningBg.drawRect(0, 0, this.storeWidth, this.storeHeight);
+      warningBg.endFill();
+      this.spaceWarningIndicator.addChild(warningBg);
+      
+      const warningText = new PIXI.Text('⚠ 空间拥挤！影响顾客浏览', {
+        fontFamily: 'Microsoft YaHei',
+        fontSize: 12,
+        fill: 0xff6600,
+        fontWeight: 'bold',
+      });
+      warningText.x = 30;
+      warningText.y = this.storeHeight - 50;
+      this.spaceWarningIndicator.addChild(warningText);
+      
+      this.container.addChild(this.spaceWarningIndicator);
+    } else if (state.spaceCompression <= GAME_CONFIG.SPACE_COMPRESSION_SEVERE && this.spaceWarningIndicator) {
+      this.container.removeChild(this.spaceWarningIndicator);
+      this.spaceWarningIndicator = null;
+    }
+  }
+
+  updateCoffeeQueueVisual() {
+    const state = this.state;
+    
+    if (state.coffeeQueueLength > GAME_CONFIG.COFFEE_QUEUE_IMPACT_THRESHOLD && !this.coffeeQueueIndicator) {
+      this.coffeeQueueIndicator = new PIXI.Container();
+      
+      const queueBg = new PIXI.Graphics();
+      queueBg.beginFill(0xff9900, 0.3);
+      queueBg.drawRoundedRect(0, -25, 150, 20, 3);
+      queueBg.endFill();
+      this.coffeeQueueIndicator.addChild(queueBg);
+      
+      const queueText = new PIXI.Text(`排队 ${state.coffeeQueueLength} 人`, {
+        fontFamily: 'Microsoft YaHei',
+        fontSize: 11,
+        fill: 0xff6600,
+        fontWeight: 'bold',
+      });
+      queueText.x = 5;
+      queueText.y = -23;
+      this.coffeeQueueIndicator.addChild(queueText);
+      
+      this.coffeeQueueIndicator.x = 700;
+      this.coffeeQueueIndicator.y = 50;
+      this.container.addChild(this.coffeeQueueIndicator);
+    } else if (state.coffeeQueueLength > GAME_CONFIG.COFFEE_QUEUE_IMPACT_THRESHOLD && this.coffeeQueueIndicator) {
+      const textChild = this.coffeeQueueIndicator.children[1];
+      if (textChild) {
+        textChild.text = `排队 ${state.coffeeQueueLength} 人`;
+      }
+    } else if (this.coffeeQueueIndicator) {
+      this.container.removeChild(this.coffeeQueueIndicator);
+      this.coffeeQueueIndicator = null;
+    }
+  }
+
   updateActivityVisual() {
     const state = this.state;
     const activityZone = this.zones.activity;
@@ -632,9 +818,15 @@ export class BookstoreScene {
         banner.endFill();
         this.activityIndicator.addChild(banner);
         
-        const text = new PIXI.Text(state.currentActivity.name || '活动进行中', {
+        let activityLabel = state.currentActivity.name || '活动进行中';
+        const boostedCat = state.currentActivity.boostedCategory;
+        if (boostedCat && BOOK_CATEGORIES[boostedCat]) {
+          activityLabel += ` → ${BOOK_CATEGORIES[boostedCat].name}推荐`;
+        }
+        
+        const text = new PIXI.Text(activityLabel, {
           fontFamily: 'Microsoft YaHei',
-          fontSize: 14,
+          fontSize: 13,
           fill: 0xffffff,
           fontWeight: 'bold',
         });

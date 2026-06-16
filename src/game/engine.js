@@ -1,7 +1,7 @@
 import { getGameState } from './state.js';
 import { generateRandomCustomer, calculateDailyCustomerCount } from './customer.js';
 import { getActivityManager } from './activity.js';
-import { GAME_CONFIG, BOOK_CATEGORIES } from './config.js';
+import { GAME_CONFIG, BOOK_CATEGORIES, STAFF_ROLES } from './config.js';
 
 export class GameEngine {
   constructor() {
@@ -17,13 +17,30 @@ export class GameEngine {
     this.onMoneyChange = null;
     this.onActivityStart = null;
     this.onActivityEnd = null;
+    this.onCrisisTrigger = null;
+    this.onCrisisResolved = null;
+    this.onSpaceWarning = null;
     
     this.todayCustomersSpawned = 0;
+    this.coffeeCustomers = 0;
   }
 
   init() {
     this.state = getGameState();
     this.activityManager = getActivityManager();
+    
+    this.activityManager.onCrisisTrigger = (crisis) => {
+      if (this.onCrisisTrigger) {
+        this.onCrisisTrigger(crisis);
+      }
+    };
+    
+    this.activityManager.onCrisisResolved = (option, trustChange) => {
+      if (this.onCrisisResolved) {
+        this.onCrisisResolved(option, trustChange);
+      }
+    };
+    
     this.prepareDay();
   }
 
@@ -34,6 +51,7 @@ export class GameEngine {
     const openHours = GAME_CONFIG.CLOSE_HOUR - GAME_CONFIG.OPEN_HOUR;
     this.customerSpawnInterval = (openHours * 60) / this.dayCustomersRemaining;
     this.customerSpawnTimer = 0;
+    this.coffeeCustomers = 0;
   }
 
   update(deltaSeconds) {
@@ -54,9 +72,35 @@ export class GameEngine {
     this.updateCustomers(deltaMinutes);
     this.spawnCustomers(deltaMinutes);
     this.activityManager.update(deltaHours);
+    this.updateCoffeeQueue(deltaMinutes);
+    this.state.updateSpaceCompression();
+    
+    if (this.state.spaceCompression > GAME_CONFIG.SPACE_COMPRESSION_SEVERE) {
+      if (this.onSpaceWarning) {
+        this.onSpaceWarning('severe');
+      }
+    }
 
     if (this.state.hour >= GAME_CONFIG.CLOSE_HOUR) {
       this.endDay();
+    }
+  }
+
+  updateCoffeeQueue(deltaMinutes) {
+    const state = this.state;
+    
+    const coffeeZoneCustomers = state.customers.filter(c => c.currentZone === 'coffee').length;
+    state.coffeeQueueLength = coffeeZoneCustomers;
+    
+    if (coffeeZoneCustomers > GAME_CONFIG.COFFEE_QUEUE_IMPACT_THRESHOLD) {
+      for (const customer of state.customers) {
+        if (customer.currentZone !== 'coffee' && customer.state === 'browsing') {
+          if (customer.currentZone === 'books' || customer.currentZone === 'activity') {
+            customer.patience -= deltaMinutes * GAME_CONFIG.COFFEE_QUEUE_SLOW_FACTOR;
+            customer.mood = Math.max(0, customer.mood - deltaMinutes * 0.002);
+          }
+        }
+      }
     }
   }
 
@@ -105,6 +149,10 @@ export class GameEngine {
     
     if (state.currentActivity) {
       spawnInterval /= state.currentActivity.customerBoost || 1.2;
+    }
+    
+    if (state.spaceCompression > GAME_CONFIG.SPACE_COMPRESSION_THRESHOLD) {
+      spawnInterval /= state.getBrowseMultiplier();
     }
 
     while (this.customerSpawnTimer >= spawnInterval && 
@@ -212,6 +260,15 @@ export class GameEngine {
     
     state.isRunning = true;
     state.isPaused = false;
+    state.crisisChecked = false;
+    state.crisisActive = false;
+    state.currentCrisis = null;
+    state.crisisResolved = false;
+    
+    Object.keys(BOOK_CATEGORIES).forEach(key => {
+      state.displayConfig[key].prominent = false;
+    });
+    
     this.prepareDay();
     
     return true;
@@ -246,6 +303,7 @@ export class GameEngine {
     
     state.subtractMoney(cost);
     state.inventory[category] += quantity;
+    state.displayConfig[category].stock = state.inventory[category];
     
     if (this.onMoneyChange) {
       this.onMoneyChange(state.money);
@@ -282,6 +340,15 @@ export class GameEngine {
       return { success: false, reason: '至少需要1名员工' };
     }
     
+    const unassigned = state.getUnassignedStaffCount();
+    if (unassigned <= 0) {
+      const maxRole = Object.entries(state.staffAssignments)
+        .sort((a, b) => b[1] - a[1])[0];
+      if (maxRole && maxRole[1] > 0) {
+        state.staffAssignments[maxRole[0]]--;
+      }
+    }
+    
     state.staffCount--;
     return { success: true };
   }
@@ -299,6 +366,7 @@ export class GameEngine {
     
     state.subtractMoney(cost);
     state.seatCount += 2;
+    state.updateSpaceCompression();
     
     if (this.onMoneyChange) {
       this.onMoneyChange(state.money);
@@ -315,7 +383,24 @@ export class GameEngine {
     }
     
     state.seatCount -= 2;
+    state.updateSpaceCompression();
     return { success: true };
+  }
+
+  assignStaff(role, count) {
+    const state = this.state;
+    const result = state.assignStaff(role, count);
+    return { success: result };
+  }
+
+  setDisplayProminent(category, prominent) {
+    const state = this.state;
+    const result = state.setDisplayProminent(category, prominent);
+    return { success: result };
+  }
+
+  resolveCrisis(optionId) {
+    return this.activityManager.resolveCrisis(optionId);
   }
 }
 

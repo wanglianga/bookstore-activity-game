@@ -1,7 +1,7 @@
 import { getGameState } from '../game/state.js';
 import { getGameEngine } from '../game/engine.js';
 import { getActivityManager } from '../game/activity.js';
-import { ACTIVITY_TYPES, BOOK_CATEGORIES } from '../game/config.js';
+import { ACTIVITY_TYPES, BOOK_CATEGORIES, STAFF_ROLES, GAME_CONFIG } from '../game/config.js';
 
 export class UIManager {
   constructor() {
@@ -12,6 +12,7 @@ export class UIManager {
     this.uiLayer = document.getElementById('ui-layer');
     this.notifications = [];
     this.currentTab = 'activity';
+    this.crisisModalOpen = false;
     
     this.init();
   }
@@ -54,6 +55,10 @@ export class UIManager {
           <span class="stat-label">会员数</span>
           <span class="stat-value" id="stat-members">0</span>
         </div>
+        <div class="stat-item" id="space-stat-item">
+          <span class="stat-label">空间压力</span>
+          <span class="stat-value" id="stat-space">0%</span>
+        </div>
       </div>
       <div class="day-control">
         <div class="day-info">
@@ -88,6 +93,7 @@ export class UIManager {
         <button class="tab-btn active" data-tab="activity">活动</button>
         <button class="tab-btn" data-tab="inventory">进货</button>
         <button class="tab-btn" data-tab="staff">人员</button>
+        <button class="tab-btn" data-tab="display">陈列</button>
         <button class="tab-btn" data-tab="stats">统计</button>
       </div>
       
@@ -125,6 +131,9 @@ export class UIManager {
       case 'staff':
         this.renderStaffTab(content);
         break;
+      case 'display':
+        this.renderDisplayTab(content);
+        break;
       case 'stats':
         this.renderStatsTab(content);
         break;
@@ -141,14 +150,19 @@ export class UIManager {
     if (state.currentActivity) {
       const act = state.currentActivity;
       const progress = ((state.hour - act.startTime) / act.duration * 100).toFixed(0);
+      const boostedCat = act.boostedCategory;
+      const boostedCatName = boostedCat && BOOK_CATEGORIES[boostedCat] ? BOOK_CATEGORIES[boostedCat].name : '';
+      
       html += `
         <div class="activity-card active">
           <div class="activity-name">${act.name}（进行中）</div>
           <div class="activity-desc">${act.desc}</div>
+          ${boostedCatName ? `<div class="activity-desc" style="color: #ffd700;">推荐陈列：${boostedCatName}</div>` : ''}
           <div class="progress-bar">
             <div class="progress-fill" style="width: ${progress}%"></div>
           </div>
-          <div class="activity-cost">剩余 ${(state.activityEndTime - state.hour).toFixed(1)} 小时</div>
+          <div class="activity-cost">剩余 ${(state.activityEndTime - state.hour).toFixed(1)} 小时 | 空间占用: ${act.spaceUsed}%</div>
+          <div class="activity-desc" style="color: #ff9900; margin-top: 4px;">⚠ 活动期间可能发生讲师取消等突发事件</div>
         </div>
       `;
     } else {
@@ -162,11 +176,14 @@ export class UIManager {
     
     activities.forEach(act => {
       const disabledClass = act.canStart ? '' : 'disabled';
+      const boostedCatName = act.boostedCategory && BOOK_CATEGORIES[act.boostedCategory] ? BOOK_CATEGORIES[act.boostedCategory].name : '';
+      
       html += `
         <div class="activity-card ${disabledClass}" data-activity="${act.key}" style="${!act.canStart ? 'opacity: 0.5; cursor: not-allowed;' : ''}">
           <div class="activity-name">${act.name}</div>
           <div class="activity-desc">${act.desc}</div>
           <div class="activity-cost">费用: ¥${act.cost} | 人气+${act.popularityGain} | 空间: ${act.spaceUsed}%</div>
+          ${boostedCatName ? `<div class="activity-desc" style="color: #4a90d9;">吸引客群 → 推荐：${boostedCatName}</div>` : ''}
           ${!act.canStart ? `<div style="color: #ff6b6b; font-size: 11px; margin-top: 4px;">${act.reason}</div>` : ''}
         </div>
       `;
@@ -194,10 +211,11 @@ export class UIManager {
       const cat = BOOK_CATEGORIES[key];
       const stock = state.inventory[key] || 0;
       const lowStock = stock < 10;
+      const isProminent = state.displayConfig[key] && state.displayConfig[key].prominent;
       
       html += `
         <div class="activity-card" data-category="${key}">
-          <div class="activity-name">${cat.name}</div>
+          <div class="activity-name">${cat.name} ${isProminent ? '★推荐' : ''}</div>
           <div class="activity-desc">
             库存: <span style="color: ${lowStock ? '#ff6b6b' : '#4a7c4a'}">${stock} 本</span>
             | 进价: ¥${(cat.basePrice * 0.6).toFixed(0)}
@@ -263,18 +281,45 @@ export class UIManager {
     html += '</div>';
     
     html += '<div class="panel-section">';
+    html += '<div class="panel-section-title">岗位分配</div>';
+    html += `<div style="font-size: 11px; color: #a0896c; margin-bottom: 8px;">未分配: ${state.getUnassignedStaffCount()} 人</div>`;
+    
+    Object.keys(STAFF_ROLES).forEach(role => {
+      const roleConfig = STAFF_ROLES[role];
+      const count = state.staffAssignments[role] || 0;
+      
+      html += `
+        <div class="staff-role-item">
+          <div class="staff-role-info">
+            <div class="staff-role-name">${roleConfig.name}</div>
+            <div class="staff-role-desc">${roleConfig.desc}</div>
+          </div>
+          <div class="staff-role-controls">
+            <button class="manage-btn remove" data-role="${role}" data-action="remove-role">-</button>
+            <span class="staff-role-count">${count}</span>
+            <button class="manage-btn add" data-role="${role}" data-action="add-role">+</button>
+          </div>
+        </div>
+      `;
+    });
+    
+    html += '</div>';
+    
+    html += '<div class="panel-section">';
     html += '<div class="panel-section-title">空间使用</div>';
     html += `
       <div style="margin-bottom: 8px;">
-        <span>已使用: ${state.usedSpace}%</span>
-        <span style="float: right;">总空间: 100%</span>
+        <span>空间压力: ${state.spaceCompression.toFixed(0)}%</span>
+        <span style="float: right;">遮挡书架: ${state.blockedShelves} 个</span>
       </div>
       <div class="progress-bar">
-        <div class="progress-fill ${state.usedSpace > 70 ? 'warn' : ''} ${state.usedSpace > 90 ? 'danger' : ''}" 
-             style="width: ${state.usedSpace}%"></div>
+        <div class="progress-fill ${state.spaceCompression > 50 ? 'warn' : ''} ${state.spaceCompression > 75 ? 'danger' : ''}" 
+             style="width: ${state.spaceCompression}%"></div>
       </div>
+      ${state.coffeeQueueLength > GAME_CONFIG.COFFEE_QUEUE_IMPACT_THRESHOLD ? 
+        `<div style="font-size: 11px; color: #ff6600; margin-top: 6px;">⚠ 咖啡区排队 ${state.coffeeQueueLength} 人，影响浏览</div>` : ''}
       <div style="font-size: 11px; color: #a0896c; margin-top: 6px;">
-        活动会占用卖场空间，影响客流量
+        活动会占用卖场空间，空间过挤影响顾客浏览和购买
       </div>
     `;
     html += '</div>';
@@ -295,6 +340,82 @@ export class UIManager {
     
     document.getElementById('btn-remove-seats').addEventListener('click', () => {
       this.removeSeats();
+    });
+    
+    container.querySelectorAll('[data-action="add-role"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.assignStaff(btn.dataset.role, 1);
+      });
+    });
+    
+    container.querySelectorAll('[data-action="remove-role"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.assignStaff(btn.dataset.role, -1);
+      });
+    });
+  }
+
+  renderDisplayTab(container) {
+    const state = this.state;
+    
+    let html = '<div class="panel-section">';
+    html += '<div class="panel-section-title">图书陈列调整</div>';
+    html += '<div style="font-size: 11px; color: #a0896c; margin-bottom: 10px;">将书架设为推荐陈列可提升对应类别销量（最多2个）</div>';
+    
+    if (state.currentActivity) {
+      const boostedCat = state.currentActivity.boostedCategory;
+      if (boostedCat && BOOK_CATEGORIES[boostedCat]) {
+        html += `<div style="font-size: 11px; color: #ffd700; margin-bottom: 8px; padding: 6px; background: rgba(139,105,20,0.2); border-radius: 4px;">
+          当前活动推荐：${BOOK_CATEGORIES[boostedCat].name}（已自动推荐）
+        </div>`;
+      }
+    }
+    
+    Object.keys(BOOK_CATEGORIES).forEach(key => {
+      const cat = BOOK_CATEGORIES[key];
+      const stock = state.inventory[key] || 0;
+      const isProminent = state.displayConfig[key] && state.displayConfig[key].prominent;
+      
+      html += `
+        <div class="display-card ${isProminent ? 'prominent' : ''}" data-category="${key}">
+          <div class="display-info">
+            <div class="display-name">${cat.name} ${isProminent ? '★' : ''}</div>
+            <div class="display-stock">库存: ${stock}本 | 售价: ¥${cat.basePrice}</div>
+          </div>
+          <button class="manage-btn ${isProminent ? 'remove' : 'add'} display-toggle-btn" 
+                  data-category="${key}" data-prominent="${!isProminent}">
+            ${isProminent ? '取消推荐' : '设为推荐'}
+          </button>
+        </div>
+      `;
+    });
+    
+    html += '</div>';
+    
+    html += '<div class="panel-section">';
+    html += '<div class="panel-section-title">空间影响提示</div>';
+    html += `
+      <div style="font-size: 12px; color: #c4a574; line-height: 1.8;">
+        <div>• 活动座位过多会遮挡书架，影响顾客选书</div>
+        <div>• 咖啡区排队过长会影响附近顾客浏览</div>
+        <div>• 合理安排布局，平衡活动空间和销售区域</div>
+        <div style="margin-top: 6px; color: ${state.spaceCompression > 50 ? '#ff9900' : '#4a7c4a'};">
+          当前空间压力：${state.spaceCompression.toFixed(0)}%
+          ${state.spaceCompression > 75 ? '（严重拥挤）' : state.spaceCompression > 50 ? '（略显拥挤）' : '（良好）'}
+        </div>
+      </div>
+    `;
+    html += '</div>';
+    
+    container.innerHTML = html;
+    
+    container.querySelectorAll('.display-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const category = btn.dataset.category;
+        const prominent = btn.dataset.prominent === 'true';
+        this.setDisplayProminent(category, prominent);
+      });
     });
   }
 
@@ -329,6 +450,10 @@ export class UIManager {
         <div style="display: flex; justify-content: space-between;">
           <span style="color: #c4a574;">每日固定支出</span>
           <span style="color: #ff6b6b; font-weight: bold;">¥${state.dailyRent + state.staffCount * 150}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: #c4a574;">销售效率</span>
+          <span style="color: ${(state.getSalesMultiplier() * 100).toFixed(0) < 80 ? '#ff6b6b' : '#4a7c4a'};">${(state.getSalesMultiplier() * 100).toFixed(0)}%</span>
         </div>
       </div>
     `;
@@ -370,6 +495,12 @@ export class UIManager {
       <div class="info-title">欢迎来到书香阁</div>
       <div class="info-content">
         点击"开始营业"开始新的一天。合理安排活动、进货和人员配置，在租金压力下提升销售额和会员活跃度！
+        <br><br>
+        <span style="color: #ffd700;">活动影响：</span>亲子活动→家庭客，新书分享→深度读者，调整陈列和岗位应对！
+        <br>
+        <span style="color: #ff9900;">空间管理：</span>活动座位遮挡书架，咖啡排队影响浏览，合理安排布局！
+        <br>
+        <span style="color: #ff6b6b;">危机应对：</span>讲师取消可选择店员分享、延期或退款，影响会员信任！
       </div>
     `;
     
@@ -377,6 +508,79 @@ export class UIManager {
   }
 
   createDayStartModal() {
+  }
+
+  showCrisisModal(crisis) {
+    if (this.crisisModalOpen) return;
+    this.crisisModalOpen = true;
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay crisis-overlay';
+    modal.id = 'crisis-modal';
+    
+    const activityName = crisis.activity ? crisis.activity.name : '活动';
+    
+    let optionsHtml = '';
+    crisis.options.forEach(option => {
+      const trustColor = option.trustChange >= 0 ? '#4a7c4a' : '#ff6b6b';
+      const repColor = option.reputationChange >= 0 ? '#4a7c4a' : '#ff6b6b';
+      
+      optionsHtml += `
+        <div class="crisis-option" data-option="${option.id}">
+          <div class="crisis-option-name">${option.name}</div>
+          <div class="crisis-option-desc">${option.desc}</div>
+          <div class="crisis-option-effects">
+            <span style="color: ${trustColor};">会员信任 ${option.trustChange >= 0 ? '+' : ''}${option.trustChange}</span>
+            <span style="color: ${repColor};">口碑 ${option.reputationChange >= 0 ? '+' : ''}${option.reputationChange}</span>
+            <span style="color: #ffd700;">${option.costRefund > 0 ? `退款${(option.costRefund * 100).toFixed(0)}%` : '无退款'}</span>
+          </div>
+        </div>
+      `;
+    });
+    
+    modal.innerHTML = `
+      <div class="modal crisis-modal">
+        <div class="modal-title crisis-title">⚠ 紧急事件</div>
+        <div class="crisis-content">
+          <div class="crisis-event-desc">
+            <strong>${crisis.type.name}</strong><br>
+            ${crisis.type.desc}<br>
+            <span style="color: #ff9900;">当前活动：${activityName}</span>
+          </div>
+          <div class="crisis-options-title">选择应对方案：</div>
+          <div class="crisis-options">
+            ${optionsHtml}
+          </div>
+        </div>
+      </div>
+    `;
+    
+    this.uiLayer.appendChild(modal);
+    
+    modal.querySelectorAll('.crisis-option').forEach(optEl => {
+      optEl.addEventListener('click', () => {
+        const optionId = optEl.dataset.option;
+        this.resolveCrisis(optionId);
+        modal.remove();
+        this.crisisModalOpen = false;
+      });
+    });
+  }
+
+  resolveCrisis(optionId) {
+    const result = this.engine.resolveCrisis(optionId);
+    if (result.success) {
+      const trustChange = result.trustChange;
+      const trustStr = trustChange >= 0 ? `+${trustChange}` : `${trustChange}`;
+      this.showNotification(
+        `危机处理：${result.option.name} — 会员信任${trustStr}，口碑${result.reputationChange}`,
+        trustChange >= -5 ? 'warning' : 'error'
+      );
+      this.switchTab(this.currentTab);
+      this.updateStats();
+    } else {
+      this.showNotification(result.reason, 'error');
+    }
   }
 
   startDay() {
@@ -398,7 +602,9 @@ export class UIManager {
   startActivity(activityKey) {
     const result = this.activityManager.startActivity(activityKey.toUpperCase());
     if (result.success) {
-      this.showNotification(`${result.activity.name} 开始了！`, 'success');
+      const boostedCatName = result.activity.boostedCategory && BOOK_CATEGORIES[result.activity.boostedCategory] 
+        ? `，推荐陈列：${BOOK_CATEGORIES[result.activity.boostedCategory].name}` : '';
+      this.showNotification(`${result.activity.name} 开始了！${boostedCatName}`, 'success');
       this.switchTab(this.currentTab);
       this.updateStats();
     } else {
@@ -461,6 +667,36 @@ export class UIManager {
     }
   }
 
+  assignStaff(role, count) {
+    const result = this.engine.assignStaff(role, count);
+    if (result.success) {
+      const roleConfig = STAFF_ROLES[role];
+      this.showNotification(
+        count > 0 ? `分配了一名${roleConfig.name}` : `取消了一名${roleConfig.name}`,
+        count > 0 ? 'success' : 'warning'
+      );
+      this.updateStats();
+      this.switchTab('staff');
+    } else {
+      this.showNotification('人员不足或分配无效', 'error');
+    }
+  }
+
+  setDisplayProminent(category, prominent) {
+    const result = this.engine.setDisplayProminent(category, prominent);
+    if (result.success) {
+      const catName = BOOK_CATEGORIES[category] ? BOOK_CATEGORIES[category].name : category;
+      this.showNotification(
+        prominent ? `已将${catName}设为推荐陈列` : `已取消${catName}推荐陈列`,
+        prominent ? 'success' : 'warning'
+      );
+      this.updateStats();
+      this.switchTab('display');
+    } else {
+      this.showNotification('推荐陈列已达上限（最多2个）', 'error');
+    }
+  }
+
   updateStats() {
     const state = this.state;
     
@@ -470,6 +706,14 @@ export class UIManager {
     document.getElementById('stat-customers').textContent = state.dailyCustomers;
     document.getElementById('stat-sales').textContent = `¥${state.dailySales.toFixed(0)}`;
     document.getElementById('stat-members').textContent = state.activeMembers;
+    
+    const spaceEl = document.getElementById('stat-space');
+    if (spaceEl) {
+      spaceEl.textContent = `${state.spaceCompression.toFixed(0)}%`;
+      spaceEl.className = 'stat-value';
+      if (state.spaceCompression > 75) spaceEl.classList.add('danger');
+      else if (state.spaceCompression > 50) spaceEl.classList.add('warning-space');
+    }
     
     document.getElementById('day-number').textContent = `第 ${state.day} 天`;
     document.getElementById('day-time').textContent = state.timeString;
@@ -518,6 +762,10 @@ export class UIManager {
           <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
             <span>新增会员</span>
             <span style="color: #4a90d9;">${dayRecord.newMembers} 人</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span>销售效率</span>
+            <span>${(this.state.getSalesMultiplier() * 100).toFixed(0)}%</span>
           </div>
           <div style="border-top: 1px solid #6b4423; padding-top: 10px; margin-top: 10px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
